@@ -1,0 +1,152 @@
+TITLE:: Tx81z
+summary:: An implementation of Yamaha's TX81Z FM synthesizer
+categories:: UGens>Generators>Deterministic
+related:: Classes/FM7
+
+DESCRIPTION::
+
+A Port of Csound's version of Yamaha's TX81Z FM synth.
+
+This synth consists of 4 operators which can be wired into 13 configurations (called algorithms). Each operator has its own wave type and its associated envelope. All elements of the original implementation are simulated (midi velocity curves, envelopes, waveforms, etc)
+
+
+CLASSMETHODS::
+
+METHOD:: ar
+The main method of the synthesizer. Before calling Tx81z.ar(...) you need to call Tx81z.initData()
+
+ARGUMENT:: gate
+opens and closes the envelope. See also doneAction
+
+ARGUMENT:: velocity
+The velocity of the note (0-127). The actual value depends on the velocityCurve used
+
+ARGUMENT:: kfreq1
+The frequency of Operator 1
+
+ARGUMENT:: kfreq2
+The frequency of Operator 2
+
+
+ARGUMENT:: kfreq3
+The frequency of Operator 3
+
+
+ARGUMENT:: kfreq4
+The frequency of Operator 4
+
+ARGUMENT:: volume
+A volume 0-99 used to modify the global gain
+
+ARGUMENT:: velocityCurve
+Following the original implementation there are 3 curves
+0=flat curve, all velocities result in full amplitude
+1=small sensitivity
+2=medium sensitivity
+
+ARGUMENT:: op1
+Gain of Operator1
+
+ARGUMENT:: op2
+Gain of Operator2
+
+ARGUMENT:: op3
+Gain of Operator3
+
+ARGUMENT:: op4
+Gain of Operator4
+
+ARGUMENT:: feedback
+Feedback coefficient of Operator4
+
+ARGUMENT:: algorithm
+There are 13 different configurations in which the operators
+modulate each other.
+
+ARGUMENT:: doneAction
+A DoneAction passed to the internal envelope, can be used
+to free the synth when the gate is closed
+
+ARGUMENT:: att4
+Attack for Operator4 (an integer in the range 0-31, 1 is a long attack, 31 is a short attack)
+Corresponds to the parameter "AR" in the Tx81z
+
+ARGUMENT:: dec4
+Decay for Operator4 (an integer in the range 0-31, 0 disables decay, 1 is slow decay, 31 is very fast)
+Corresponds to the parameter "D1R" in the Tx81z
+
+
+ARGUMENT:: sust4
+Sustain for Operator4 (an integer in the range 0-15. 0=0, 15=1)
+Corresponds to the parameter "D1L" in the Tx81z
+
+
+ARGUMENT:: ext4
+Extinction for Operator4 (after reaching the sustain level, the envelope decays further to 0)
+Similar to decay (an integer between 0-31, 0 disables extinction, 1 is slow, 31 is very fast)
+Corresponds to the parameter "D2R" in the Tx81z
+
+
+ARGUMENT:: rel4
+(An integer between 0-15)
+Release time, this defines the duration of the release when the gate is closed and the evelope has not
+reached 0. Corresponds to the parameter "RR" in the Tx81z
+
+
+ARGUMENT:: wave4
+Waveform for Operator4 (an integer in the range 0-7). 0=Sine wave
+
+ARGUMENT:: att3
+see att4
+
+ARGUMENT:: dec3
+see dec4
+
+ARGUMENT:: sust3
+see sust4
+
+ARGUMENT:: ext3
+see ext4
+
+ARGUMENT:: rel3
+see rel4
+
+METHOD:: initData
+Must be called before creating any Tx81z instance. Since it allocates some data in the server, and must wait for server synchronisation, it is called inside a Routine.
+
+EXAMPLES::
+
+code::
+
+(   // init data of Tx81z, connect to midi
+Tx81z.initData();
+MIDIClient.init;
+MIDIIn.connectAll;
+)
+
+(
+SynthDef(\tx81z_demo, {|gate=1, kfreq=220, vel=90, algorithm=0|
+	var tx = Tx81z.ar(gate, velocity:vel, algorithm:algorithm,
+		kfreq1:kfreq/2, kfreq2:kfreq/2*1.02, kfreq3:kfreq*0.996, kfreq4:kfreq,
+		feedback:0.91, wave4:3, op2:0.6, op3: 0.52, op4:0.6, doneAction:2);
+	Out.ar(0, tx);
+}).send;
+)
+
+a = Synth(\tx81z_demo, args:[freq:440, vel:90, algorithm:4]);
+a.set(\gate, 0);
+
+(  // use a midi keyboard
+~synths = Array.fill(128, nil);
+
+MIDIFunc.noteOn({|vel, midinote|
+	~synths[midinote] = Synth(\tx81z_demo, args:[kfreq:midinote.midicps, vel:vel, algIdx:4]);
+});
+
+MIDIFunc.noteOff({|vel, midinote|
+	~synths[midinote].set(\gate, 0);
+});
+)
+
+
+::

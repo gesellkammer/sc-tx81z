@@ -9,6 +9,8 @@ A Port of Csound's version of Yamaha's TX81Z FM synth.
 
 This synth consists of 4 operators which can be wired into 13 configurations (called algorithms). Each operator has its own wave type and its associated envelope. All elements of the original implementation are simulated (midi velocity curves, envelopes, waveforms, etc)
 
+Consult Tx81z.algorithmDescrs for the topology of each algorithm
+
 
 CLASSMETHODS::
 
@@ -148,5 +150,7 @@ MIDIFunc.noteOff({|vel, midinote|
 });
 )
 
+// Query the topology of the algorithms:
+Tx81z.algorithmDescrs[4]
 
 ::

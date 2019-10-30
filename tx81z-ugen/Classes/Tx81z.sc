@@ -22,7 +22,7 @@ Usage and Documentation
 
 See the .schelp file for info
 
-ExamplealgIdx
+Example
 =======
 
 (
@@ -45,7 +45,7 @@ SynthDef(\tx81z_demo, {|gate=1, kfreq=220, vel=90, algorithm=0|
 ~synths = Array.fill(128, nil);
 
 MIDIFunc.noteOn({|vel, midinote|
-	~synths[midinote] = Synth(\tx81z_demo, args:[kfreq:midinote.midicps, vel:vel, algIdx:4]);
+	~synths[midinote] = Synth(\tx81z_demo, args:[kfreq:midinote.midicps, vel:vel, algorithm:4]);
 });
 
 MIDIFunc.noteOff({|vel, midinote|
@@ -68,6 +68,7 @@ Tx81z {
 	table_D1L,
 	table_VOL,
 	velocityCurves;
+
 	classvar algorithms = #[
 		[ 1,0,0,1,0,1,0, 0,0,0 ],
 		[ 1,0,0,1,1,0,0, 0,0,0 ],
@@ -83,7 +84,39 @@ Tx81z {
 		[ 1,0,0,0,1,0,1, 0,0,0 ], //    ; FD(OP4) -> OP2 -> OP1
 		[ 1,0,0,1,1,0,1, 0,0,0 ]
 	];
-	classvar algorithmsNumcols = 10;
+
+	// OP1 is always present in the result
+	classvar <algorithmColumns = #[
+		"2 -> 1",
+		"3 -> 1",
+		"4 -> 1",
+		"3 -> 2",
+		"4 -> 2",
+		"4 -> 3",
+		"4 -> 4",
+		"+2",
+		"+3",
+		"+4"
+	];
+
+	classvar <algorithmDescrs = #[
+		"4 -> 3 -> 2 -> 1",
+		"(3 + 4) -> 2 -> 1",
+		"(4 + (3->2)) -> 1",
+		"(2 + (4->3)) -> 1",
+		"(4->3) + (2->1)",
+		"(4->1) + (4->2) + (4->3)",
+		"(4->3) + 2",
+		"1 + 2 + 3 + 4",
+		"2 -> 1",
+		"1",
+		"4 -> 2 -> 1",
+		"(4->4) -> 2 -> 1",
+		"(4 + 3) -> 2 -> 1"
+	];
+
+	// the algorithms matrix is flattened in the server so we need to know the row width
+	classvar algorithmsNumcols = 10;    
 	classvar
 	algorithmsBuf,
 	velcurveBufnums,
@@ -160,7 +193,7 @@ Tx81z {
 				1000, 822, 572, 440, 400,
 				380, 310, 278, 165, 135,
 				130,125 ]);
-			table_D1R = Buffer.sendCollection(s, [
+			table_D1R = Buffer.sendCollection(s, #[
 				-1000, 3116605/*0*/, 2179104/*1*/, 1547622/*2*/, 1086731/*3*/,
 				778176/*4*/, 542607/*5*/, 389089/*6*/, 272208/*7*/, 450000 /*316000 8*/,
 				137953/*9*/, 98004/*10*/, 69000/*11*/, 48235/*12*/, 34239/*13*/,
@@ -269,8 +302,8 @@ Tx81z {
 		var rel = BufRd.kr(1, table_RR.bufnum, rr) / 96000;
 		var env_no_decs = EnvGen.kr(Env([0, 1, 0], [att, rel], releaseNode:1), gate:gate);
 		var env_no_dec2 = EnvGen.kr(Env([0, 1, sust1, 0], [att, dec1, rel], releaseNode:2), gate:gate);
-		var env_no_dec1 = EnvGen.kr(Env([0, 1, 0.001, 0], [att, dec2, rel], releaseNode:2), gate:gate);
-		var env_full = EnvGen.kr(Env([0, 1, sust1, 0.001, 0], [att, dec1, dec2, rel], releaseNode:3), gate:gate);
+		var env_no_dec1 = EnvGen.kr(Env([0, 1, 0.0001, 0], [att, dec2, rel], releaseNode:2), gate:gate);
+		var env_full = EnvGen.kr(Env([0, 1, sust1, 0.0001, 0], [att, dec1, dec2, rel], releaseNode:3), gate:gate);
 		var no_dec1 = dec1 < 0;
 		var no_dec2 = dec2 < 0;
 		var which = no_dec2 + (no_dec1*2);
@@ -327,7 +360,7 @@ Tx81z {
 	  feedback: feedback coeffiecient applied to OP4 (k4FB)
 	  algorithm: algorithm index (0..12)
 	  doneAction: what to do when the gate closes
-	  att_, dec_, sust_, ext_, rel_: attack, decay, sustain, extintion and release for each operator
+	  att_, dec_, sust_, ext_, rel_: attack, decay, sustain, extinction and release for each operator
 	  wave1, wave2, wave3, wave4: the wavetable used for each operator (0..7, 0 is a sinewave)
 
 	Envelope:
@@ -343,7 +376,7 @@ Tx81z {
 	*/
 	* ar {|gate, velocity, kfreq1, kfreq2, kfreq3, kfreq4, volume=99, velocityCurve=2,
 		op1=1, op2=0.52, op3=0.42, op4=0.52, feedback=0.89, algorithm=5, doneAction=0,
-		att4=31, dec4=16, sust4=3, ext4=7, rel4=16, wave4=3,
+		att4=31, dec4=16, sust4=3, ext4=7, rel4=15, wave4=3,
 		att3=31, dec3=17, sust3=3, ext3=0, rel3=8,  wave3=0,
 		att2=31, dec2=9,  sust2=0, ext2=0, rel2=8,  wave2=0,
 		att1=31, dec1=9,  sust1=0, ext1=0, rel1=8,  wave1=0|
@@ -403,7 +436,6 @@ Tx81z {
 			att1, dec1, sust1, ext1, rel1, velcurveBuf);
 		aOP1 = op1 * aOP1;
 		// a0 = aOP1 + aOP2*kALG[algIdx][7] + aOP3*kALG[algIdx][8] + aOP4*kALG[algIdx][9]
-		// a0 = aOP1 + (aOP2 * ~getmtx.(algIdx, 7)) + (aOP3 * ~getmtx.(algIdx, 8)) + (aOP4 * ~getmtx.(algIdx, 9));
 		a0 = (
 			aOP1 +
 			(aOP2 * BufRd.kr(1, algbuf, algrow + 7)) +

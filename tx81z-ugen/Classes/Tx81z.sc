@@ -70,7 +70,7 @@ Tx81z {
     velocityCurves;
 
     classvar algorithms = #[
-        [ 1,0,0,1,0,1,0, 0,0,0 ],
+		[ 1,0,0,1,0,1,0, 0,0,0 ],
         [ 1,0,0,1,1,0,0, 0,0,0 ],
         [ 1,0,1,1,0,0,0, 0,0,0 ],
         [ 1,1,0,0,0,1,0, 0,0,0 ],
@@ -116,7 +116,7 @@ Tx81z {
     ];
 
     // the algorithms matrix is flattened in the server so we need to know the row width
-    classvar algorithmsNumcols = 10;    
+    classvar algorithmsNumcols = 10;
     classvar
     algorithmsBuf,
     velcurveBufnums,

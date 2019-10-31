@@ -11,6 +11,24 @@ This synth consists of 4 operators which can be wired into 13 configurations (ca
 
 Consult Tx81z.algorithmDescrs for the topology of each algorithm
 
+This is the list of the implemented algorithms:
+
+list::
+## 0)  4 -> 3 -> 2 -> 1
+## 1)  (3 + 4) -> 2 -> 1
+## 2)  (4 + (3->2)) -> 1
+## 3)  (2 + (4->3)) -> 1
+## 4)  (4->3) + (2->1)
+## 5)  (4->1) + (4->2) + (4->3)
+## 6)  (4->3) + 2
+## 7)  1 + 2 + 3 + 4
+## 8)  2 -> 1
+## 9)  1
+## 10) 4 -> 2 -> 1
+## 11) (4->4) -> 2 -> 1
+## 12) (4 + 3) -> 2 -> 1   
+
+::
 
 CLASSMETHODS::
 
@@ -127,22 +145,25 @@ MIDIIn.connectAll;
 )
 
 (
+// experiment with different ratios between the frequencies,
+// with different algorithms, etc.
 SynthDef(\tx81z_demo, {|gate=1, kfreq=220, vel=90, algorithm=0|
 	var tx = Tx81z.ar(gate, velocity:vel, algorithm:algorithm,
 		kfreq1:kfreq/2, kfreq2:kfreq/2*1.02, kfreq3:kfreq*0.996, kfreq4:kfreq,
+		wave1:0, wave2:0, wave3:0, wave4:3, 
 		feedback:0.91, wave4:3, op2:0.6, op3: 0.52, op4:0.6, doneAction:2);
 	Out.ar(0, tx);
 }).send;
 )
 
-a = Synth(\tx81z_demo, args:[freq:440, vel:90, algorithm:4]);
+a = Synth(\tx81z_demo, args:[freq:440, vel:90, algorithm:0]);
 a.set(\gate, 0);
 
 (  // use a midi keyboard
 ~synths = Array.fill(128, nil);
 
 MIDIFunc.noteOn({|vel, midinote|
-	~synths[midinote] = Synth(\tx81z_demo, args:[kfreq:midinote.midicps, vel:vel, algIdx:4]);
+	~synths[midinote] = Synth(\tx81z_demo, args:[kfreq:midinote.midicps, vel:vel, algorithm:4]);
 });
 
 MIDIFunc.noteOff({|vel, midinote|

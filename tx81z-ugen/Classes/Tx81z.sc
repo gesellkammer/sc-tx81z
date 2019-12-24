@@ -295,15 +295,23 @@ Tx81z {
 
     // generates the envelope
     * m_Env { |gate, ar, d1r, d1l, d2r, rr, id=0 |
-        var att = BufRd.kr(1, table_AR.bufnum, ar) / 96000;
-        var dec1 = BufRd.kr(1, table_D1R.bufnum, d1r) / 96000;
+        /*
+        ar: attack rate (0-31). Time to reach full amp. more is faster
+        d1r: decay rate (0-31). Time to decay to d1l. more is faster
+        d1l: sustain vol (0-15). more is higher
+        d2r: second decay (or extinction decay), (0-31). More is faster
+        rr: release date (0-15). More is faster
+        */
+        var att   = BufRd.kr(1, table_AR.bufnum, ar) / 96000;
+        var dec1  = BufRd.kr(1, table_D1R.bufnum, d1r) / 96000;
         var sust1 = BufRd.kr(1, table_D1L.bufnum, d1l) / 96000;
-        var dec2 = BufRd.kr(1, table_D2R.bufnum, d2r) / 96000;
-        var rel = BufRd.kr(1, table_RR.bufnum, rr) / 96000;
+        var dec2  = BufRd.kr(1, table_D2R.bufnum, d2r) / 96000;
+        var rel   = BufRd.kr(1, table_RR.bufnum, rr) / 96000;
+        var eps = 0.0001;
         var env_no_decs = EnvGen.kr(Env([0, 1, 0], [att, rel], releaseNode:1), gate:gate);
         var env_no_dec2 = EnvGen.kr(Env([0, 1, sust1, 0], [att, dec1, rel], releaseNode:2), gate:gate);
-        var env_no_dec1 = EnvGen.kr(Env([0, 1, 0.0001, 0], [att, dec2, rel], releaseNode:2), gate:gate);
-        var env_full = EnvGen.kr(Env([0, 1, sust1, 0.0001, 0], [att, dec1, dec2, rel], releaseNode:3), gate:gate);
+        var env_no_dec1 = EnvGen.kr(Env([0, 1, eps,   0], [att, dec2, rel], releaseNode:2), gate:gate);
+        var env_full    = EnvGen.kr(Env([0, 1, sust1, eps, 0], [att, dec1, dec2, rel], releaseNode:3), gate:gate);
         var no_dec1 = dec1 < 0;
         var no_dec2 = dec2 < 0;
         var which = no_dec2 + (no_dec1*2);
@@ -312,6 +320,7 @@ Tx81z {
         // kAdd transeg 0, 0.01, -8 ,1
         var kAdd = EnvGen.ar(Env([0, 1], times:[0.01], curve:-8));
         var kout = (gen ** 6.6) * kAdd;
+        // (id * 1000 + kout).poll;
         ^kout;
     }
 
@@ -322,18 +331,20 @@ Tx81z {
         ^out;
     }
 
-    // defines one of the 4 operators
-    //   gate:the gate passed to the .ar method
-    //   aMod: the modulation signal (an audio signal)
-    //   kCarFreq: the carrier frequency (can be modulated, could be audio)
-    //   vel: the velocity (0-127) as passed to the .ar method
-    //   kWaveBuf: the bufnum containing the wavetable uses for the carrier
-    //   att, dec, sust, dec2, rel: envelope
-    //   velocityCurveBuf: the bufnum containing the velocity curve
-    //   gain: a gain which is applied to this operator
-    //   id: an id, for debugging purposes
-    * m_Operator {|gate, aMod, carFreq, vel, kWaveBuf, att=31, dec=16, sust=3, dec2=7, rel=16,
-        velocityCurveBuf=1, gain=1, id=0|
+    /*
+    defines one of the 4 operators
+      gate:the gate passed to the .ar method
+      aMod: the modulation signal (an audio signal)
+      kCarFreq: the carrier frequency (can be modulated, could be audio)
+      vel: the velocity (0-127) as passed to the .ar method
+      kWaveBuf: the bufnum containing the wavetable uses for the carrier
+      att, dec, sust, dec2, rel: envelope
+      velocityCurveBuf: the bufnum containing the velocity curve
+      gain: a gain which is applied to this operator
+      id: an id, for debugging purposes
+    */
+    * m_Operator {|gate, aMod, carFreq, vel, kWaveBuf, att=31, dec=16, sust=3, dec2=7, rel=8,
+        velocityCurveBuf=1, gain=1, id=99|
         // iVelSen tablei iVel, 20+iKVS
         // var velocityCurveBuf = BufRd.kr(1, ~velcurves.bufnum, iKVS, interpolation:1, loop:0);
         var iVelSen = BufRd.kr(1, velocityCurveBuf, vel, interpolation:2, loop:0);
@@ -392,11 +403,14 @@ Tx81z {
         var kWaveBuf1 = BufRd.kr(1, waveTables, wave1);
         var mtxcols = algorithmsNumcols;
         var algrow = algIdx * algnumcols;
+        // we calculate the max. release time to schedule a doneAction
+        var maxrel = MinItem([rel1, rel2, rel3, rel4]);
+        var maxrelsecs = BufRd.kr(1, table_RR.bufnum, maxrel) / 96000;
 
         var velcurveBuf = BufRd.kr(1, velcurveBufnums.bufnum, velocityCurve, interpolation:1, loop:0);
         var fback = LocalIn.ar(4);
 
-        var aOP1, aOP2, aOP3, aOP4, ain4, ain3, ain2, ain1, a0, coef;
+        var aOP1, aOP2, aOP3, aOP4, ain4, ain3, ain2, ain1, a0, coef, doneEnv;
 
         //ain4 = aOP4*kALG[algIdx][6]*k4FB
         aOP4 = fback[3];
@@ -412,7 +426,7 @@ Tx81z {
 
         // aOP3 TX_OP ain3, .5*kfreq*0.996,31, 17, 0, 0, 8, 5,     1,    iVel, 2  ;0.996
         aOP3 = this.m_Operator(gate, ain3, kfreq3, velocity, kWaveBuf3,
-            att3, dec3, sust3, ext3, rel3, velcurveBuf);
+            att3, dec3, sust3, ext3, rel3, velcurveBuf, id:3);
         aOP3 = aOP3 * op3;
 
         // ain2 = aOP3*kALG[algIdx][3] + aOP4*kALG[algIdx][4]
@@ -422,7 +436,7 @@ Tx81z {
         );
         // aOP2 TX_OP ain2, kfreq/4,  31,  9, 0, 0, 8, 1,     1,    iVel, 3
         aOP2 = this.m_Operator(gate, ain2, kfreq2, velocity, kWaveBuf2,
-            att2, dec2, sust2, ext2, rel2, velcurveBuf);
+            att2, dec2, sust2, ext2, rel2, velcurveBuf, id:2);
         aOP2 = op2 * aOP2;
 
         // ain1 = aOP2*kALG[algIdx][0] + aOP3*kALG[algIdx][1] + aOP4*kALG[algIdx][2]
@@ -433,7 +447,7 @@ Tx81z {
         );
         // aOP1 TX_OP ain1, kfreq/4,  31, 9,  0,  0, 8, 1,     1,    iVel, 4
         aOP1 = this.m_Operator(gate, ain1, kfreq1, velocity, kWaveBuf1,
-            att1, dec1, sust1, ext1, rel1, velcurveBuf);
+            att1, dec1, sust1, ext1, rel1, velocityCurveBuf: velcurveBuf, id:1);
         aOP1 = op1 * aOP1;
         // a0 = aOP1 + aOP2*kALG[algIdx][7] + aOP3*kALG[algIdx][8] + aOP4*kALG[algIdx][9]
         a0 = (
@@ -446,7 +460,11 @@ Tx81z {
         LocalOut.ar([aOP1, aOP2, aOP3, aOP4]);
 
         a0 = this.m_FilterPost(a0);
-        a0 = a0 * EnvGen.ar(Env.asr(ControlDur.ir, 1, ControlDur.ir), gate:gate, doneAction:doneAction);
+        // a0 = a0 * EnvGen.ar(Env.asr(ControlDur.ir, 1, ControlDur.ir), gate:gate);
+        doneEnv = EnvGen.ar(Env([0, 1, 1, 0], [ControlDur.ir, maxrelsecs, ControlDur.ir], releaseNode:1),
+            gate:gate, doneAction: doneAction);
+        a0 = a0 * doneEnv;
+        // doneEnv.poll(8);
         ^(a0 * kOut);
     }
 }

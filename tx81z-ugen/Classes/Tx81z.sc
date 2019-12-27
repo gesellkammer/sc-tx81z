@@ -360,6 +360,12 @@ Tx81z {
         ^aOut;
     }
 
+    * m_minitem { |array|
+        var out = array[0];
+        array[1..].do{ |item, i| out = if(item < out, item, out) };
+        ^out;
+    }
+
     /*
     Args:
       gate: opens and closes the envelope.
@@ -403,9 +409,6 @@ Tx81z {
         var kWaveBuf1 = BufRd.kr(1, waveTables, wave1);
         var mtxcols = algorithmsNumcols;
         var algrow = algIdx * algnumcols;
-        // we calculate the max. release time to schedule a doneAction
-        var maxrel = MinItem([rel1, rel2, rel3, rel4]);
-        var maxrelsecs = BufRd.kr(1, table_RR.bufnum, maxrel) / 96000;
 
         var velcurveBuf = BufRd.kr(1, velcurveBufnums.bufnum, velocityCurve, interpolation:1, loop:0);
         var fback = LocalIn.ar(4);
@@ -460,14 +463,9 @@ Tx81z {
         LocalOut.ar([aOP1, aOP2, aOP3, aOP4]);
 
         a0 = this.m_FilterPost(a0);
-        // a0 = a0 * EnvGen.ar(Env.asr(ControlDur.ir, 1, ControlDur.ir), gate:gate);
-        doneEnv = EnvGen.ar(Env([0, 1, 1, 0], [ControlDur.ir, maxrelsecs, ControlDur.ir], releaseNode:1),
-            gate:gate, doneAction: doneAction);
-        a0 = a0 * doneEnv;
-        // doneEnv.poll(8);
+        DetectSilence.ar(a0, time:0.15, doneAction: doneAction);
         ^(a0 * kOut);
     }
 }
-
 
 
